@@ -189,69 +189,6 @@ def get_sintaxis_add_column(nombre_col, tipo_dato, motor_bd):
     return f"ADD COLUMN {nombre_col} {tipo_dato}"
 
 
-def get_sintaxis_drop_column(nombre_col, motor_bd):
-    """Retorna la sintaxis DROP COLUMN para cada motor"""
-    if motor_bd == 'postgresql':
-        return f"DROP COLUMN {nombre_col}"
-    elif motor_bd == 'mysql':
-        return f"DROP COLUMN `{nombre_col}`"
-    elif motor_bd == 'sqlserver':
-        return f"DROP COLUMN [{nombre_col}]"
-    elif motor_bd == 'oracle':
-        return f"DROP ({nombre_col})"
-    elif motor_bd == 'sqlite':
-        return f"DROP COLUMN {nombre_col}"
-    return f"DROP COLUMN {nombre_col}"
-
-
-def get_sintaxis_modify_column(nombre_col, tipo_dato, motor_bd):
-    """Retorna la sintaxis MODIFY COLUMN para cada motor"""
-    if motor_bd == 'postgresql':
-        return f"ALTER COLUMN {nombre_col} TYPE {tipo_dato}"
-    elif motor_bd == 'mysql':
-        return f"MODIFY COLUMN `{nombre_col}` {tipo_dato}"
-    elif motor_bd == 'sqlserver':
-        return f"ALTER COLUMN [{nombre_col}] {tipo_dato}"
-    elif motor_bd == 'oracle':
-        return f"MODIFY ({nombre_col} {tipo_dato})"
-    elif motor_bd == 'sqlite':
-        return f"-- SQLite no soporta MODIFY COLUMN directamente para {nombre_col}"
-    return f"MODIFY COLUMN {nombre_col} {tipo_dato}"
-
-
-def get_sintaxis_primary_key(columnas, nombre_pk, motor_bd):
-    """Retorna la sintaxis PRIMARY KEY para cada motor"""
-    cols_str = ', '.join(columnas)
-    constraint_name = nombre_pk or f"pk_{'_'.join(columnas)}"
-    
-    if motor_bd == 'postgresql':
-        return f"CONSTRAINT {constraint_name} PRIMARY KEY ({cols_str})"
-    elif motor_bd == 'mysql':
-        return f"PRIMARY KEY ({cols_str})"
-    elif motor_bd == 'sqlserver':
-        return f"CONSTRAINT [{constraint_name}] PRIMARY KEY ({cols_str})"
-    elif motor_bd == 'oracle':
-        return f"CONSTRAINT {constraint_name} PRIMARY KEY ({cols_str})"
-    elif motor_bd == 'sqlite':
-        return f"PRIMARY KEY ({cols_str})"
-    return f"PRIMARY KEY ({cols_str})"
-
-
-def get_sintaxis_foreign_key(columna, tabla_ref, motor_bd):
-    """Retorna la sintaxis FOREIGN KEY para cada motor"""
-    if motor_bd == 'postgresql':
-        return f"FOREIGN KEY ({columna}) REFERENCES {tabla_ref}"
-    elif motor_bd == 'mysql':
-        return f"FOREIGN KEY (`{columna}`) REFERENCES {tabla_ref}"
-    elif motor_bd == 'sqlserver':
-        return f"FOREIGN KEY ([{columna}]) REFERENCES {tabla_ref}"
-    elif motor_bd == 'oracle':
-        return f"FOREIGN KEY ({columna}) REFERENCES {tabla_ref}"
-    elif motor_bd == 'sqlite':
-        return f"FOREIGN KEY ({columna}) REFERENCES {tabla_ref}"
-    return f"FOREIGN KEY ({columna}) REFERENCES {tabla_ref}"
-
-
 def get_sintaxis_comment_table(esquema, nombre_tabla, comentario, motor_bd):
     """Retorna la sintaxis COMMENT para tablas"""
     if motor_bd == 'postgresql':
@@ -280,18 +217,6 @@ def get_sintaxis_comment_column(esquema, nombre_tabla, nombre_col, comentario, m
     elif motor_bd == 'sqlite':
         return f"-- Comentario columna {nombre_col}: {comentario}"
     return f"-- Comentario {nombre_col}: {comentario}"
-
-
-def get_encabezado_script(motor_bd):
-    """Retorna encabezado del script segun el motor"""
-    headers = {
-        'postgresql': "-- PostgreSQL Script\n-- Generado automaticamente\n",
-        'mysql': "-- MySQL Script\n-- Generado automaticamente\nSET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS = 0;\n",
-        'sqlserver': "-- SQL Server Script\n-- Generado automaticamente\nSET ANSI_NULLS ON;\nGO\nSET QUOTED_IDENTIFIER ON;\nGO\n",
-        'oracle': "-- Oracle Script\n-- Generado automaticamente\nSET DEFINE OFF;\n",
-        'sqlite': "-- SQLite Script\n-- Generado automaticamente\nPRAGMA foreign_keys = ON;\n"
-    }
-    return headers.get(motor_bd, "-- SQL Script\n")
 
 
 def get_sintaxis_create_user(nombre_usuario, motor_bd):
@@ -547,56 +472,6 @@ def validar_estructura_crear_tabla(df):
         import traceback
         traceback.print_exc()
         return False, f"Error validando estructura: {str(e)}"
-
-# =========================
-# Busqueda de headers en el contenido
-# =========================
-def encontrar_headers_en_contenido(df):
-    """
-    Busca los headers dentro del contenido del DataFrame, no en los nombres de columnas.
-    Detecta sinonimos y soporta 'tamano'/'tamano'/'tamanio'/'longitud'/'largo'/'size'.
-    """
-    columnas_headers = {}
-    fila_headers = None
-
-    # Mapeo de sinonimos -> clave
-    synonyms = {
-        "nombre_columna": {"nombre de la columna", "nombre_columna", "columna", "campo"},
-        "accion": {"accion", "accion", "operacion", "operacion", "action"},
-        "tipo_dato": {"tipo de dato", "tipo_dato", "tipo dato", "tipo", "data type"},
-        "tamano": {"tamano", "tamano", "tamanio", "longitud", "largo", "size", "length"},
-        "nullable": {"es nullable", "nullable", "acepta null", "null", "permite null"},
-        "primaria": {"es llave primaria", "Es llave primaria", "llave primaria", "clave primaria", "primary key", "pk"},
-        "nombre_pk": {"nombre pk", "nombre de la pk", "pk name"},
-        "default": {"por defecto", "default", "valor defecto", "por por defecto", "defecto", "valor por defecto"},
-        "foranea": {"es foranea", "Es foranea", "foranea", "foreign key", "fk", "foranea", "es foranea"},
-        "referencia": {"tabla referencia", "referencia", "tabla_referencia", "tabla ref", "ref"},
-        "comentario": {"comentario de campo", "comentario campo", "comentario", "descripcion", "descripcion"}
-    }
-
-    def normalize(s):
-        return str(s).strip().lower()
-
-    for i in range(len(df)):
-        headers_temp = {}
-        for j in range(len(df.columns)):
-            val = df.iloc[i, j]
-            if pd.isna(val):
-                continue
-            vs = normalize(val)
-            # probar cada clave y sus sinonimos
-            for key, words in synonyms.items():
-                if vs in words:
-                    headers_temp[key] = j
-
-        # condicion minima: nombre_columna + (tipo_dato o accion)
-        if ("nombre_columna" in headers_temp) and ("tipo_dato" in headers_temp or "accion" in headers_temp):
-            fila_headers = i
-            columnas_headers = headers_temp
-            print(f"DEBUG: Fila de headers confirmada: {i} -> {columnas_headers}")
-            break
-
-    return fila_headers, columnas_headers
 
 
 def contar_filas_validas(df, fila_headers, columnas_headers):

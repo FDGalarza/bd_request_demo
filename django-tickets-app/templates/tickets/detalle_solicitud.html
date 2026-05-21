@@ -63,6 +63,22 @@
                                 </span>
                             </p>
                         {% endif %}
+
+                        <!-- Información específica para Pull Request / Despliegue -->
+                        {% if solicitud.tipo_solicitud == 'pull_request' or solicitud.tipo_solicitud == 'despliegue' %}
+                            <hr class="my-3">
+                            <h6 class="text-primary"><i class="fab fa-git-alt"></i> Detalles de Versión</h6>
+                            <p><strong>URL Commit/PR:</strong> 
+                                {% if solicitud.url_commit %}
+                                    <a href="{{ solicitud.url_commit }}" target="_blank" class="text-break">{{ solicitud.url_commit }}</a>
+                                    <i class="fas fa-external-link-alt fa-xs text-muted"></i>
+                                {% else %}
+                                    <span class="text-muted">No especificada</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>Branch:</strong> <code class="bg-light px-2 py-1 rounded border">{{ solicitud.nombre_branch|default:"-" }}</code></p>
+                            <p><strong>Entorno:</strong> <span class="badge bg-info text-dark">{{ solicitud.entorno|default:"No especificado" }}</span></p>
+                        {% endif %}
                     </div>
                 </div>
                 

@@ -181,42 +181,6 @@ def crear_solicitud(request):
     return render(request, 'tickets/crear_solicitud.html', {'form': form})
 
 @login_required
-def editar_solicitud(request, pk):
-    solicitud = get_object_or_404(Solicitud, pk=pk)
-    
-    # Verificar permisos de edición según requerimientos
-    if not solicitud.puede_editar(request.user):
-        messages.error(request, 'No tienes permisos para editar esta solicitud o ya no está en estado registrada.')
-        return redirect('detalle_solicitud', pk=pk)
-    
-    if request.method == 'POST':
-        form = EditarSolicitudForm(request.POST, request.FILES, instance=solicitud, user=request.user)
-        if form.is_valid():
-            solicitud_actualizada = form.save(commit=False)
-            
-            # Convertir ambientes_ejecucion a lista
-            ambientes = form.cleaned_data.get('ambientes_ejecucion', [])
-            solicitud_actualizada.ambientes_ejecucion = list(ambientes) if ambientes else []
-            
-            solicitud_actualizada.save()
-            
-            # Si se cambió el archivo, resetear script generado para que DB lo regenere
-            if 'archivo_adjunto' in form.changed_data:
-                solicitud_actualizada.script_sql_generado = None
-                solicitud_actualizada.estructura_validada = False
-                solicitud_actualizada.save()
-                messages.info(request, 'Archivo actualizado. El script SQL deberá ser regenerado por el equipo de Base de Datos.')
-            
-            messages.success(request, 'Solicitud actualizada exitosamente.')
-            return redirect('detalle_solicitud', pk=pk)
-    else:
-        form = EditarSolicitudForm(instance=solicitud, user=request.user)
-        if solicitud.ambientes_ejecucion:
-            form.initial['ambientes_ejecucion'] = solicitud.ambientes_ejecucion
-    
-    return render(request, 'tickets/editar_solicitud.html', {'form': form, 'solicitud': solicitud})
-
-@login_required
 def detalle_solicitud(request, pk):
     solicitud = get_object_or_404(Solicitud, pk=pk)
     user_profile = UserProfile.objects.get_or_create(user=request.user)[0]
@@ -430,23 +394,6 @@ def validar_estructura(request):
     return render(request, 'tickets/validar_estructura.html', {'form': form})
 
 @login_required
-def descargar_script_sql(request, pk):
-    solicitud = get_object_or_404(Solicitud, pk=pk)
-    
-    # Verificar permisos según requerimientos (ingenieros dev NO pueden descargar)
-    if not solicitud.puede_descargar_script(request.user):
-        messages.error(request, 'No tienes permisos para descargar este archivo.')
-        return redirect('dashboard')
-    
-    if not solicitud.script_sql_generado:
-        messages.error(request, 'No hay script SQL generado para esta solicitud.')
-        return redirect('detalle_solicitud', pk=pk)
-    
-    response = HttpResponse(solicitud.script_sql_generado, content_type='text/plain')
-    response['Content-Disposition'] = f'attachment; filename="script_solicitud_{pk}.sql"'
-    return response
-
-@login_required
 def solicitudes_pendientes_script(request):
     """Vista para mostrar solicitudes pendientes de generar script SQL"""
     user_profile = UserProfile.objects.get_or_create(user=request.user)[0]
@@ -582,23 +529,6 @@ def editar_proyecto(request, pk):
 
 @login_required
 @user_passes_test(es_admin)
-def eliminar_proyecto(request, pk):
-    """Eliminar proyecto - Solo para admins"""
-    proyecto = get_object_or_404(Proyecto, pk=pk)
-    
-    if request.method == 'POST':
-        if proyecto.solicitudes.exists():
-            messages.error(request, 'No se puede eliminar el proyecto porque tiene solicitudes asociadas.')
-        else:
-            nombre_proyecto = proyecto.nombre
-            proyecto.delete()
-            messages.success(request, f'Proyecto "{nombre_proyecto}" eliminado exitosamente.')
-            return redirect('lista_proyectos')
-    
-    return render(request, 'tickets/admin/eliminar_proyecto.html', {'proyecto': proyecto})
-
-@login_required
-@user_passes_test(es_admin)
 def asignar_miembros_proyecto(request, pk):
     """Asignar miembros a un proyecto - Solo para admins"""
     proyecto = get_object_or_404(Proyecto, pk=pk)
@@ -708,34 +638,6 @@ def crear_usuario(request):
         form = CrearUsuarioForm()
     
     return render(request, 'tickets/admin/crear_usuario.html', {'form': form})
-
-@login_required
-@user_passes_test(es_admin)
-def editar_usuario(request, pk):
-    """Editar usuario - Solo para admins"""
-    usuario = get_object_or_404(User, pk=pk)
-    profile, created = UserProfile.objects.get_or_create(user=usuario)
-    
-    if request.method == 'POST':
-        form = UserProfileForm(request.POST, instance=profile)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Usuario "{usuario.username}" actualizado exitosamente.')
-            return redirect('gestionar_usuarios')
-    else:
-        form = UserProfileForm(instance=profile)
-    
-    # Calcular estadísticas del usuario
-    solicitudes_activas = usuario.solicitud_set.exclude(estado__in=['finalizada', 'cancelada']).count()
-    
-    context = {
-        'form': form, 
-        'usuario': usuario,
-        'profile': profile,
-        'solicitudes_activas': solicitudes_activas,  # AGREGADO para el template
-    }
-    
-    return render(request, 'tickets/admin/editar_usuario.html', context)
 
 @login_required
 @user_passes_test(es_admin)
